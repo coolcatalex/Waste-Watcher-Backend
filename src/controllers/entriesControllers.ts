@@ -7,6 +7,7 @@ import usersModel from "../models/userModel.js";
 import assert from "assert";
 import onboardingModel from "../models/onboardingModel.js";
 import dayjs from "dayjs";
+import awarenessModel from "../models/awarenessModel.js";
 
 
 type ENTRYTYPE = {
@@ -138,7 +139,7 @@ export async function search({areaname, orgId,fromLastAwareness,startDate,endDat
     createdAtendDate?: number,
     sort: string,
     orgId: string,
-    areaname?: string,
+    areaname?: string[],
     page: number,
     count: number,
     fromLastAwareness: Boolean,
@@ -179,7 +180,9 @@ export async function search({areaname, orgId,fromLastAwareness,startDate,endDat
         }
 
         if (area) match.area = area;
-        if (areaname) match.areaName = areaname;
+        if (areaname) match.areaName = {
+            "$in": areaname
+        };
         if (classroom) match.classroom = classroom;
         if (classType) match.classType = classType;
         if (unit) match.unit = unit;
@@ -209,12 +212,112 @@ export async function search({areaname, orgId,fromLastAwareness,startDate,endDat
                 }
             }
         );
-
         var entries = await entriesModel.aggregate(pipeline)
 
         return {
             code: 200,
             data: entries[0]
+        }
+
+    } catch (error) {
+        if (error instanceof assert.AssertionError) {
+            return {
+                data: error.message,
+                code: 401
+            }
+        }
+        console.log(error)
+        return {
+            data: "Internal Server Error",
+            code: 500
+        }
+    }
+}
+
+export async function all({areaname, orgId,startDate,endDate,sort,direction,uId }: {
+    startDate?: number,
+    endDate?: number,
+    sort: string,
+    orgId: string,
+    areaname?: string[],
+    direction: 1 | -1
+    uId: string,
+}) {
+    try {
+        var user = await usersModel.findById(uId)
+        assert(user, "User not found")
+        assert(user.onBoardingComplete, "Onboarding is not completed, please complete it")
+        assert(user.onBoarding.findIndex(q=>q._id.toString() == orgId) != -1, "Onboarding not found")
+
+        const entriesPipeline: PipelineStage[] = [];
+        const awarenessPipeline: PipelineStage[] = [];
+
+        const entriesMatch: PipelineStage.Match['$match']  = {org: new mongoose.Types.ObjectId(orgId) };
+        const awarenessMatch: PipelineStage.Match['$match']  = {orgId: new mongoose.Types.ObjectId(orgId) };
+
+        if(startDate && endDate){
+            entriesMatch['timestamp'] = { $gte: startDate, $lte: endDate }
+            awarenessMatch['awareness_session_date'] = { $gte: startDate, $lte: endDate }
+        }
+
+       
+        if (areaname) {
+            entriesMatch.areaName = { "$in": areaname};
+            awarenessMatch.areaName = { "$in": areaname};
+        }
+        
+        entriesPipeline.push(
+            { $match: entriesMatch },
+            { $sort: { [sort]: direction } },
+            { $project:{areaName:1,timestamp:1,weight:1,waste_champion:1}}
+        );
+        awarenessPipeline.push(
+            { $match: awarenessMatch },
+            { $sort: { awareness_session_date: direction } },
+            { $project: {awareness_session_date:1,areaName:1,awareness_score:1} }
+        );
+
+        var entries = await entriesModel.aggregate(entriesPipeline)
+        var awareness = await awarenessModel.aggregate(awarenessPipeline)
+
+
+        var _entries = entries.reduce((acc,cur)=>{
+            const areaname = cur.areaName
+            if(areaname in acc){
+                acc[areaname].push({
+                    y: cur.weight,
+                    x: cur.timestamp,
+                    waste_champion: cur.waste_champion
+                })
+            }else{
+                acc[areaname] = [{
+                    y: cur.weight,
+                    x: cur.timestamp,
+                    waste_champion: cur.waste_champion
+                }]
+            }
+            return acc
+        },{})
+
+        var _awareness = awareness.reduce((acc,cur)=>{
+            const areaname = cur.areaName
+            if(areaname in acc){
+                acc[areaname].push({
+                    x: cur.awareness_session_date,
+                    score: cur.awareness_score
+                })
+            }else{
+                acc[areaname] = [{
+                    x: cur.awareness_session_date,
+                    score: cur.awareness_score
+                }]
+            }
+            return acc
+        },{})
+
+        return {
+            code: 200,
+            data: {awareness:_awareness,entries:_entries}
         }
 
     } catch (error) {

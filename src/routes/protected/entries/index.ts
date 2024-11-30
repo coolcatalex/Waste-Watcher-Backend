@@ -17,10 +17,17 @@ const protectedRoute: FastifyPluginAsyncTypebox = async (fastify, opts): Promise
     reply.code(data.code).send(data.data);
   })
 
-  fastify.get('/search',getSearch, async function (request, reply) {
-    var searchData = request.query
+  fastify.post('/search',getSearch, async function (request, reply) {
+    var searchData = request.body
     var {uId} = request.user
     var data = await entriesController.search({ ...searchData, uId})
+    reply.code(data.code).send(data.data);
+  })
+
+  fastify.post('/all',getAllSearch, async function (request, reply) {
+    var searchData = request.body
+    var {uId} = request.user
+    var data = await entriesController.all({ ...searchData, uId})
     reply.code(data.code).send(data.data);
   })
 }
@@ -30,9 +37,26 @@ const protectedRoute: FastifyPluginAsyncTypebox = async (fastify, opts): Promise
  */
 
 
+const getAllSearch = {
+  schema:{
+    body: T.Object({
+      orgId: T.String(),
+      sort:T.String({
+        default: "timestamp"
+      }),
+      direction:T.Union([T.Literal(1),T.Literal(-1)],{
+        default: -1
+      }),
+      startDate:T.Optional(T.Number()),
+      endDate:T.Optional(T.Number()),
+      areaname:T.Optional(T.Array(T.String())),
+    })
+  }
+}
+
 const getSearch = {
   schema:{
-    querystring: T.Object({
+    body: T.Object({
       // search: T.Optional(T.String()),
       page: T.Number({
         default: 1
@@ -55,7 +79,7 @@ const getSearch = {
       createdAtstartDate:T.Optional(T.Number()),
       createdAtendDate:T.Optional(T.Number()),
       area:T.Optional(T.Union([T.Literal('classroom'), T.Literal('cafeteria'), T.Literal('office')])),
-      areaname:T.Optional(T.String()),
+      areaname:T.Optional(T.Array(T.String())),
       classroom:T.Optional(T.Union([
         T.Literal('KG'),
         T.Literal('1'), T.Literal('2'), T.Literal('3'), T.Literal('4'), T.Literal('5'),

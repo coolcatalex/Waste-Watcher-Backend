@@ -29,7 +29,7 @@ const entriesSchema = new Schema({
     unit:String,
     classification:{
         type: String,
-        enum: ['sorted','semi_sorted','sorted']
+        enum: ['sorted','semi_sorted','unsorted']
     },
     wasteType:{
         paper: Number,
@@ -45,7 +45,7 @@ const entriesSchema = new Schema({
             validator: function (value:number) {
                 return value >= 1 && value <= 10;
             },
-            message: 'Maturity score must be between 1 and 5'
+            message: 'Maturity score must be between 1 and 10'
         }
 
     },

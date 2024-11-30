@@ -58,7 +58,6 @@ export async function stat({ orgId, uId }: {
         if(!onboarding.avgStudentInClass){
             onboarding.avgStudentInClass = 1
         }
-
         const wasteClassPerDay = waste[0].weight / waste[0].count
         const wasteStudentDay = wasteClassPerDay/onboarding.avgStudentInClass
         const wasteStudentMonth = wasteStudentDay * 20
